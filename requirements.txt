@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+langchain
+langgraph
+langchain-google-genai
+supabase
+python-dotenv
+langchain-community
+youtube-transcript-api
+pytube
+

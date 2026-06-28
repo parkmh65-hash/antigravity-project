@@ -1,0 +1,112 @@
+<script>
+  /**
+   * Google Apps Script Frontend Javascript Logic (script.html)
+   *
+   * Handles user interaction, form validation, calling server-side Apps Script,
+   * and updating the UI based on execution results.
+   */
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const btnAsk = document.getElementById('btn-ask');
+    const txtQuestion = document.getElementById('my-question');
+    const boxAnswer = document.getElementById('ai-answer');
+
+    // Attach Event Listeners
+    btnAsk.addEventListener('click', handleAskQuestion);
+
+    // Support submitting on Ctrl+Enter
+    txtQuestion.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        handleAskQuestion();
+      }
+    });
+
+    /**
+     * Handles the Ask Question button click event.
+     */
+    function handleAskQuestion() {
+      const questionText = txtQuestion.value.trim();
+
+      // Validation
+      if (!questionText) {
+        alert("질문을 입력해 주세요!");
+        txtQuestion.focus();
+        return;
+      }
+
+      // 1. Update UI to Loading state
+      boxAnswer.className = "ai-answer-box loading-state";
+      boxAnswer.innerHTML = `
+        <div class="spinner"></div>
+        <p>AI 질문중입니다...</p>
+      `;
+
+      // Disable inputs to prevent multiple submissions
+      btnAsk.disabled = true;
+      txtQuestion.disabled = true;
+
+      // 2. Call Google Apps Script backend function (askAI)
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onFailure)
+        .askAI(questionText);
+    }
+
+    /**
+     * Success callback from Code.gs askAI call.
+     */
+    function onSuccess(response) {
+      // Re-enable inputs
+      btnAsk.disabled = false;
+      txtQuestion.disabled = false;
+
+      // Update UI with response
+      boxAnswer.className = "ai-answer-box result-state";
+      
+      // Basic markdown/formatting helper for bolding and code blocks if present
+      boxAnswer.innerHTML = formatResponse(response);
+    }
+
+    /**
+     * Failure callback from Code.gs askAI call.
+     */
+    function onFailure(error) {
+      // Re-enable inputs
+      btnAsk.disabled = false;
+      txtQuestion.disabled = false;
+
+      // Update UI with error information
+      boxAnswer.className = "ai-answer-box error-state";
+      boxAnswer.innerHTML = `
+        <span class="material-symbols-outlined logo-icon" style="color: var(--error-color); animation: none;">warning</span>
+        <p><strong>오류가 발생했습니다.</strong></p>
+        <p>${error.message || error.toString()}</p>
+      `;
+    }
+
+    /**
+     * Helper to safely format backticks/newlines in text to simple HTML elements.
+     */
+    function formatResponse(text) {
+      if (!text) return "";
+      
+      // Escape HTML entities to prevent XSS
+      let escaped = text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+      // Format markdown bold (**text**) to HTML strong
+      escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+      // Format markdown backticks (`code`) to HTML code
+      escaped = escaped.replace(/`(.*?)`/g, '<code>$1</code>');
+
+      // Format bullet points (- item)
+      escaped = escaped.replace(/^\s*-\s+(.*?)$/gm, '• $1');
+
+      return escaped;
+    }
+  });
+</script>
