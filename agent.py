@@ -2,7 +2,8 @@ from typing import Annotated, TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langchain_core.messages import BaseMessage, HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import SupabaseVectorStore
 from supabase import create_client
 import os
@@ -37,7 +38,7 @@ def retrieve_node(state: AgentState):
     try:
         # Connect to Supabase
         supabase = create_client(supabase_url, supabase_key)
-        embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-small", dimensions=768)
         
         # Load Vector Store
         vector_store = SupabaseVectorStore(

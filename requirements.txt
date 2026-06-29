@@ -10,3 +10,4 @@ youtube-transcript-api
 pytube
 langchain-openai
 duckduckgo-search
+pypdf

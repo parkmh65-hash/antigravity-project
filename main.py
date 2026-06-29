@@ -468,10 +468,66 @@ def communicator(state: State):
     }
 
 
+from pydantic import BaseModel, Field
+
+class RouteDecision(BaseModel):
+    route: str = Field(description="어디로 갈지 경로 결정: 'casual' (일상 대화, 인사, 잡담, 안부 묻기 등) 또는 'rag' (책 내용, 목차 작성, 자료 검색, 전문 지식, 특정 문서 검색 등 RAG 시스템 검색이 필요한 질문)")
+
+def route_question_node(state: State):
+    print("\n\n============ QUESTION ROUTER ============")
+    last_message = state["messages"][-1]
+    last_msg_content = last_message.content if hasattr(last_message, "content") else str(last_message)
+    
+    router_prompt = PromptTemplate.from_template(
+        """
+        너는 사용자의 질문을 분류하는 분류 에이전트(Question Router)이다.
+        아래 질문을 보고, 일상적인 대화(인사, 소개, 날씨, 잡담, 감정 표현 등)인지, 
+        아니면 벡터 DB나 웹 검색(RAG)이 필요한 구체적인 정보 탐색/분석/지시 질문인지 분류하라.
+        
+        질문: {question}
+        """
+    )
+    
+    router_chain = router_prompt | llm.with_structured_output(RouteDecision)
+    
+    try:
+        decision = router_chain.invoke({"question": last_msg_content})
+        route = decision.route
+    except Exception as e:
+        print(f"[ERROR] Router failed: {e}. Defaulting to rag.")
+        route = "rag"
+        
+    print(f"[Router Decision] Route choice: {route} (Question: '{last_msg_content}')")
+    
+    tasks = state.get("task_history", [])
+    if route == "casual":
+        tasks.append(Task(
+            agent="communicator",
+            done=False,
+            description="일상 대화에 답변하고 사용자와 가벼운 대화를 나눕니다.",
+            done_at=""
+        ))
+        
+    references = state.get("references", {})
+    references["next_agent"] = "communicator" if route == "casual" else "supervisor"
+    
+    return {
+        "task_history": tasks,
+        "references": references
+    }
+
+def start_router(state: State):
+    """
+    router 노드 이후 다음 단계를 결정하는 라우팅 함수.
+    """
+    next_agent = state.get("references", {}).get("next_agent", "supervisor")
+    return next_agent
+
 # 상태 그래프 정의
 graph_builder = StateGraph(State)
 
 # Nodes
+graph_builder.add_node("router", route_question_node)
 graph_builder.add_node("supervisor", supervisor)     
 graph_builder.add_node("communicator", communicator)
 graph_builder.add_node("content_strategist", content_strategist)
@@ -479,7 +535,15 @@ graph_builder.add_node("vector_search_agent", vector_search_agent)
 graph_builder.add_node("web_search_agent", web_search_agent)
 
 # Edges
-graph_builder.add_edge(START, "supervisor")
+graph_builder.add_edge(START, "router")
+graph_builder.add_conditional_edges(
+    "router",
+    start_router,
+    {
+        "supervisor": "supervisor",
+        "communicator": "communicator"
+    }
+)
 graph_builder.add_conditional_edges(
     "supervisor", 
     supervisor_router,

@@ -1,7 +1,7 @@
 import os
 from langchain_core.tools import tool
 from langchain_core.documents import Document
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import SupabaseVectorStore
 from supabase import create_client
 from dotenv import load_dotenv
@@ -37,7 +37,7 @@ def retrieve(query: str) -> list:
 
     try:
         supabase = create_client(supabase_url, supabase_key)
-        embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-small", dimensions=768)
         vector_store = SupabaseVectorStore(
             client=supabase,
             embedding=embeddings,
@@ -133,7 +133,7 @@ def add_web_pages_json_to_croma(web_results: list) -> None:
             return
 
         supabase = create_client(supabase_url, supabase_key)
-        embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-small", dimensions=768)
         vector_store = SupabaseVectorStore(
             client=supabase,
             embedding=embeddings,
