@@ -29,6 +29,11 @@ function askAI(question) {
     return "💡 [안내] Google Apps Script 프로젝트 설정(Project Settings) -> Script Properties에 'BACKEND_URL' 키와 실제 배포된 Cloud Run URL(/chat 포함)을 설정해 주세요.\n\n현재 임시 설정된 URL: " + backendUrl;
   }
   
+  // Auto-append '/chat' if missing to avoid routing errors
+  if (backendUrl && !backendUrl.match(/\/chat\/?$/)) {
+    backendUrl = backendUrl.replace(/\/$/, '') + '/chat';
+  }
+  
   var payload = {
     "message": question
   };

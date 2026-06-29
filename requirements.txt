@@ -8,4 +8,5 @@ python-dotenv
 langchain-community
 youtube-transcript-api
 pytube
+langchain-openai
 

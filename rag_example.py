@@ -43,7 +43,7 @@ def run_rag_pipeline(youtube_url: str, user_question: str):
         # Load transcript using LangChain's YouTube Loader (handles Korean & English)
         loader = YoutubeLoader.from_youtube_url(
             youtube_url, 
-            add_video_info=True, 
+            add_video_info=False, 
             language=["ko", "en"]
         )
         docs = loader.load()

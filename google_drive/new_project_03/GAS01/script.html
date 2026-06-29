@@ -103,8 +103,8 @@
       // Format markdown backticks (`code`) to HTML code
       escaped = escaped.replace(/`(.*?)`/g, '<code>$1</code>');
 
-      // Format bullet points (- item)
-      escaped = escaped.replace(/^\s*-\s+(.*?)$/gm, '• $1');
+      // Format bullet points (- item or * item)
+      escaped = escaped.replace(/^\s*[-*]\s+(.*?)$/gm, '• $1');
 
       return escaped;
     }

@@ -20,8 +20,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy source code files
-COPY main.py .
-COPY agent.py .
+COPY *.py ./
 
 # Expose port
 EXPOSE 8080
