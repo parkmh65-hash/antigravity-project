@@ -311,6 +311,7 @@ def web_search_agent(state: State):
     # 검색 결과를 add_web_pages_json_to_croma 함수를 통해 벡터 DB에 저장
     if web_results:
         add_web_pages_json_to_croma(web_results)
+        references["last_added_time"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     # task 완료
     task.done = True
@@ -520,6 +521,9 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
+    db_row_count: int = 0
+    last_added_time: str = "최근 추가 이력 없음"
+    execution_time_sec: float = 0.0
 
 @app.get("/")
 def read_root():
@@ -527,6 +531,9 @@ def read_root():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
+    import time
+    start_time = time.time()
+
     # 각 HTTP 요청마다 독립된 에이전트 상태를 구성
     initial_state = State(
         messages=[
@@ -552,7 +559,31 @@ async def chat(request: ChatRequest):
         last_msg = final_state["messages"][-1]
         reply_content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
         
-        return ChatResponse(reply=reply_content)
+        # 실행 시간 계산
+        execution_time = round(time.time() - start_time, 2)
+        
+        # 마지막 추가 시간 추출
+        last_added_time = final_state.get("references", {}).get("last_added_time", "최근 추가 이력 없음")
+        
+        # 벡터 DB 행 수 조회
+        db_row_count = 0
+        try:
+            supabase_url = os.getenv("SUPABASE_URL")
+            supabase_key = os.getenv("SUPABASE_KEY")
+            if supabase_url and supabase_key and supabase_url != "your_supabase_url_here":
+                from supabase import create_client
+                supabase = create_client(supabase_url, supabase_key)
+                res = supabase.table("documents").select("id", count="exact").limit(1).execute()
+                db_row_count = res.count if res.count is not None else 0
+        except Exception as e:
+            print(f"[ERROR] Failed to fetch Supabase row count: {e}")
+            
+        return ChatResponse(
+            reply=reply_content,
+            db_row_count=db_row_count,
+            last_added_time=last_added_time,
+            execution_time_sec=execution_time
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500,

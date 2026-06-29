@@ -26,7 +26,10 @@ function askAI(question) {
   if (!backendUrl || backendUrl === "https://your-cloud-run-url.run.app/chat") {
     // Fallback URL placeholder
     backendUrl = "https://your-cloud-run-url.run.app/chat";
-    return "💡 [안내] Google Apps Script 프로젝트 설정(Project Settings) -> Script Properties에 'BACKEND_URL' 키와 실제 배포된 Cloud Run URL(/chat 포함)을 설정해 주세요.\n\n현재 임시 설정된 URL: " + backendUrl;
+    return {
+      "reply": "💡 [안내] Google Apps Script 프로젝트 설정(Project Settings) -> Script Properties에 'BACKEND_URL' 키와 실제 배포된 Cloud Run URL(/chat 포함)을 설정해 주세요.\n\n현재 임시 설정된 URL: " + backendUrl,
+      "error": true
+    };
   }
   
   // Auto-append '/chat' if missing to avoid routing errors
@@ -52,11 +55,17 @@ function askAI(question) {
     
     if (responseCode === 200) {
       var data = JSON.parse(responseBody);
-      return data.reply;
+      return data;
     } else {
-      return "⚠️ 백엔드 오류 발생 (HTTP " + responseCode + "):\n" + responseBody;
+      return {
+        "reply": "⚠️ 백엔드 오류 발생 (HTTP " + responseCode + "):\n" + responseBody,
+        "error": true
+      };
     }
   } catch (error) {
-    return "❌ 백엔드 서버와 통신할 수 없습니다:\n" + error.toString();
+    return {
+      "reply": "❌ 백엔드 서버와 통신할 수 없습니다:\n" + error.toString(),
+      "error": true
+    };
   }
 }

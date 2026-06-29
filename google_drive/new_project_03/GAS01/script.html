@@ -22,6 +22,8 @@
       }
     });
 
+    let currentTurnDiv = null;
+
     /**
      * Handles the Ask Question button click event.
      */
@@ -35,18 +37,39 @@
         return;
       }
 
-      // 1. Update UI to Loading state
-      boxAnswer.className = "ai-answer-box loading-state";
-      boxAnswer.innerHTML = `
-        <div class="spinner"></div>
-        <p>AI 질문중입니다...</p>
-      `;
+      // Remove empty state if present
+      if (boxAnswer.classList.contains("empty-state")) {
+        boxAnswer.innerHTML = "";
+        boxAnswer.className = "ai-answer-box result-state";
+      }
 
-      // Disable inputs to prevent multiple submissions
+      // Create and append the new chat turn element
+      currentTurnDiv = document.createElement("div");
+      currentTurnDiv.className = "chat-turn";
+      currentTurnDiv.innerHTML = `
+        <div class="chat-question">
+          <span class="material-symbols-outlined chat-icon">person</span>
+          <div class="chat-bubble-user">${formatResponse(questionText)}</div>
+        </div>
+        <div class="chat-answer loading-active">
+          <span class="material-symbols-outlined chat-icon spin-icon">smart_toy</span>
+          <div class="chat-bubble-ai">
+            <div class="spinner-small"></div>
+            <span>AI 답변을 생성하고 있습니다...</span>
+          </div>
+        </div>
+      `;
+      boxAnswer.appendChild(currentTurnDiv);
+
+      // Scroll to bottom
+      boxAnswer.scrollTop = boxAnswer.scrollHeight;
+
+      // Clear input and disable elements to prevent multiple submissions
+      txtQuestion.value = "";
       btnAsk.disabled = true;
       txtQuestion.disabled = true;
 
-      // 2. Call Google Apps Script backend function (askAI)
+      // Call Google Apps Script backend function (askAI)
       google.script.run
         .withSuccessHandler(onSuccess)
         .withFailureHandler(onFailure)
@@ -61,11 +84,54 @@
       btnAsk.disabled = false;
       txtQuestion.disabled = false;
 
-      // Update UI with response
-      boxAnswer.className = "ai-answer-box result-state";
-      
-      // Basic markdown/formatting helper for bolding and code blocks if present
-      boxAnswer.innerHTML = formatResponse(response);
+      if (!currentTurnDiv) return;
+
+      const answerDiv = currentTurnDiv.querySelector(".chat-answer");
+      if (!answerDiv) return;
+
+      answerDiv.className = "chat-answer"; // remove loading-active
+
+      if (response && response.error) {
+        answerDiv.innerHTML = `
+          <span class="material-symbols-outlined chat-icon" style="color: var(--error-color);">warning</span>
+          <div class="chat-bubble-ai error-bubble">
+            <strong>오류가 발생했습니다:</strong><br>${formatResponse(response.reply)}
+          </div>
+        `;
+        currentTurnDiv = null;
+        boxAnswer.scrollTop = boxAnswer.scrollHeight;
+        return;
+      }
+
+      const reply = response.reply || response;
+      const dbRowCount = response.db_row_count || 0;
+      const lastAddedTime = response.last_added_time || "최근 추가 이력 없음";
+      const executionTimeSec = response.execution_time_sec || 0.0;
+
+      answerDiv.innerHTML = `
+        <span class="material-symbols-outlined chat-icon">smart_toy</span>
+        <div class="chat-bubble-ai">
+          <div class="ai-reply">${formatResponse(reply)}</div>
+          <div class="ai-metadata">
+            <div class="metadata-item">
+              <span class="material-symbols-outlined meta-icon">database</span>
+              <span>행 수: <strong>${dbRowCount}</strong>개</span>
+            </div>
+            <div class="metadata-item">
+              <span class="material-symbols-outlined meta-icon">history</span>
+              <span>추가 시간: <strong>${lastAddedTime}</strong></span>
+            </div>
+            <div class="metadata-item">
+              <span class="material-symbols-outlined meta-icon">timer</span>
+              <span>사용 시간: <strong>${executionTimeSec}</strong>초</span>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Reset current reference
+      currentTurnDiv = null;
+      boxAnswer.scrollTop = boxAnswer.scrollHeight;
     }
 
     /**
@@ -76,13 +142,21 @@
       btnAsk.disabled = false;
       txtQuestion.disabled = false;
 
-      // Update UI with error information
-      boxAnswer.className = "ai-answer-box error-state";
-      boxAnswer.innerHTML = `
-        <span class="material-symbols-outlined logo-icon" style="color: var(--error-color); animation: none;">warning</span>
-        <p><strong>오류가 발생했습니다.</strong></p>
-        <p>${error.message || error.toString()}</p>
+      if (!currentTurnDiv) return;
+
+      const answerDiv = currentTurnDiv.querySelector(".chat-answer");
+      if (!answerDiv) return;
+
+      answerDiv.className = "chat-answer";
+      answerDiv.innerHTML = `
+        <span class="material-symbols-outlined chat-icon" style="color: var(--error-color);">warning</span>
+        <div class="chat-bubble-ai error-bubble">
+          <strong>서버 통신 오류가 발생했습니다:</strong><br>${error.message || error.toString()}
+        </div>
       `;
+
+      currentTurnDiv = null;
+      boxAnswer.scrollTop = boxAnswer.scrollHeight;
     }
 
     /**
