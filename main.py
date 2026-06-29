@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 from utils import save_state, get_outline, save_outline 
 from models import Task
-from tools import retrieve  
+from tools import retrieve, web_search, add_web_pages_json_to_croma  
 from datetime import datetime
 import os 
 
@@ -34,6 +34,11 @@ else:
     llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", api_key=gemini_key)
     print("[안내] 설정된 API Key가 없어 임시 키로 Gemini(gemini-1.5-flash) 모델을 구동합니다. 실제 가동 전 .env 파일을 설정해 주세요.")
 
+# 검색 우선순위 설정 플래그
+# False: 웹 검색 우선 수행 후 벡터 DB 검색 (현재 기본동작)
+# True: 벡터 DB 우선 검색 후 정보 부족 시 웹 검색 수행 (추후 설정용)
+PRIORITIZE_VECTOR_SEARCH = False
+
 # 상태 정의
 class State(TypedDict):
     messages: List[AnyMessage | str]
@@ -54,6 +59,7 @@ def supervisor(state: State): # supervisor 에이전트 추가
         - content_strategist: 사용자의 요구사항이 명확해졌을 때 사용한다. AI 팀의 콘텐츠 전략을 결정하고, 전체 책의 목차(outline)를 작성한다. 
         - communicator: AI 팀에서 해야 할 일을 스스로 판단할 수 없을 때 사용한다. 사용자에게 진행상황을 사용자에게 보고하고, 다음 지시를 물어본다. 
         - vector_search_agent: 벡터 DB 검색을 통해 목차(outline) 작성에 필요한 정보를 확보한다.
+        - web_search_agent: 목차(outline) 작성 시 최신 정보나 벡터 DB의 기존 정보가 부족할 때 사용하며, 인터넷 검색을 통해 새로운 정보를 확보하여 벡터 DB에 추가한다.
 
         아래 내용을 고려하여, 현재 해야할 일이 무엇인지, 사용할 수 있는 agent를 단답으로 말하라.
 
@@ -150,7 +156,7 @@ def vector_search_agent(state: State):
         args = tool_call["args"]
        
         query = args["query"] 
-        retrieved_docs = retrieve(args)
+        retrieved_docs = retrieve.invoke(args)
 		#① (1) 결과 담아 두기
         references["queries"].append(query) 
         references["docs"] += retrieved_docs
@@ -191,6 +197,136 @@ def vector_search_agent(state: State):
 
     # vector search agent의 작업후기를 메시지로 생성
     msg_str = f"[VECTOR SEARCH AGENT] 다음 질문에 대한 검색 완료: {queries}"
+    message = AIMessage(msg_str)
+    print(msg_str)
+
+    messages.append(message)
+    # state 업데이트
+    return {
+        "messages": messages,
+        "task_history": tasks,
+        "references": references
+    }
+
+def vector_search_router(state: State):
+    """
+    vector_search_agent 이후 다음 단계를 결정하는 라우팅 함수.
+    PRIORITIZE_VECTOR_SEARCH가 True일 때 벡터 DB에 정보가 부족하고 
+    웹 검색이 아직 수행되지 않았다면 web_search_agent로 분기합니다.
+    """
+    if PRIORITIZE_VECTOR_SEARCH:
+        web_search_done = any(t.agent == "web_search_agent" for t in state.get("task_history", []))
+        if not web_search_done:
+            references = state.get("references", {})
+            docs = references.get("docs", [])
+            # 검색 문서 수가 부족할 경우 (예: 2개 미만) 웹 검색을 보강하도록 분기
+            if len(docs) < 2:
+                tasks = state.get("task_history", [])
+                new_task = Task(
+                    agent="web_search_agent",
+                    done=False,
+                    description="벡터 DB 정보가 부족하여 웹 검색을 수행합니다.",
+                    done_at=""
+                )
+                tasks.append(new_task)
+                print("[Router] Vector DB search results are insufficient. Routing to web_search_agent.")
+                return "web_search_agent"
+                
+    return "communicator"
+
+def web_search_agent(state: State):
+    print("\n\n============ WEB SEARCH AGENT ============")
+    
+    tasks = state.get("task_history", [])
+    task = tasks[-1] if tasks else None
+    
+    if not task or task.agent != "web_search_agent":
+        task = Task(
+            agent="web_search_agent",
+            done=False,
+            description="인터넷 검색을 수행하여 부족한 정보를 보강합니다.",
+            done_at=""
+        )
+        tasks.append(task)
+
+    web_search_system_prompt = PromptTemplate.from_template(
+        """
+        너는 다른 AI Agent 들이 수행한 작업을 바탕으로, 
+        목차(outline) 작성에 필요한 유용한 정보를 인터넷(웹) 검색을 통해 찾아내고
+        그 검색 결과를 요약하여 벡터 DB에 저장하도록 돕는 Agent이다.
+
+        현재 목차(outline)을 작성하는데 필요한 최신 정보나 부족한 정보를 확보하기 위해, 
+        다음 내용을 활용해 적절한 웹 검색을 수행하라. 필요하다면 여러 번 검색 도구를 사용할 수 있다.
+
+        - 검색 목적: {mission}
+        --------------------------------
+        - 과거 검색 내용: {references}
+        --------------------------------
+        - 이전 대화 내용: {messages}
+        --------------------------------
+        - 목차(outline): {outline}
+        """
+    )
+
+    # inputs 설정
+    mission = task.description
+    references = state.get("references", {"queries": [], "docs": []})
+    messages = state["messages"]
+    outline = get_outline(current_path)
+
+    inputs = {
+        "mission": mission,
+        "references": references,
+        "messages": messages,
+        "outline": outline
+    }
+
+    # LLM과 웹 검색 모델 연결
+    llm_with_web_search = llm.bind_tools([web_search])
+    web_search_chain = web_search_system_prompt | llm_with_web_search
+
+    search_plans = web_search_chain.invoke(inputs)
+    
+    web_results = []
+    
+    if hasattr(search_plans, "tool_calls") and search_plans.tool_calls:
+        for tool_call in search_plans.tool_calls:
+            print('Web Search Tool Call:-----------------------------------', tool_call)
+            args = tool_call["args"]
+            query = args.get("query", "")
+            if query:
+                search_result = web_search.invoke(args)
+                web_results.append({
+                    "query": query,
+                    "content": search_result
+                })
+    else:
+        print("[INFO] No tool call generated by LLM for web search. Using mission as search query.")
+        search_result = web_search.invoke({"query": mission})
+        web_results.append({
+            "query": mission,
+            "content": search_result
+        })
+
+    # 검색 결과를 add_web_pages_json_to_croma 함수를 통해 벡터 DB에 저장
+    if web_results:
+        add_web_pages_json_to_croma(web_results)
+
+    # task 완료
+    task.done = True
+    task.done_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # 새로운 task 추가 (바로 vector_search_agent로 이어지도록 설정)
+    new_task = Task(
+        agent="vector_search_agent",
+        done=False,
+        description="웹 검색으로 추가된 최신 정보를 포함하여 벡터 DB에서 관련 문서를 다시 검색합니다",
+        done_at=""
+    )
+    tasks.append(new_task)
+
+    queries = [res["query"] for res in web_results]
+    msg_str = f"[WEB SEARCH AGENT] 웹 검색 완료: {queries} (결과를 벡터 DB에 저장했습니다)"
     message = AIMessage(msg_str)
     print(msg_str)
 
@@ -339,6 +475,7 @@ graph_builder.add_node("supervisor", supervisor)
 graph_builder.add_node("communicator", communicator)
 graph_builder.add_node("content_strategist", content_strategist)
 graph_builder.add_node("vector_search_agent", vector_search_agent)
+graph_builder.add_node("web_search_agent", web_search_agent)
 
 # Edges
 graph_builder.add_edge(START, "supervisor")
@@ -348,11 +485,20 @@ graph_builder.add_conditional_edges(
     {
         "content_strategist": "content_strategist",
         "communicator": "communicator",
-        "vector_search_agent": "vector_search_agent"
+        "vector_search_agent": "vector_search_agent",
+        "web_search_agent": "web_search_agent"
     }
 )
 graph_builder.add_edge("content_strategist", "communicator")
-graph_builder.add_edge("vector_search_agent", "communicator")
+graph_builder.add_conditional_edges(
+    "vector_search_agent",
+    vector_search_router,
+    {
+        "communicator": "communicator",
+        "web_search_agent": "web_search_agent"
+    }
+)
+graph_builder.add_edge("web_search_agent", "vector_search_agent")
 graph_builder.add_edge("communicator", END)
 
 graph = graph_builder.compile()
