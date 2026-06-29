@@ -69,3 +69,31 @@ function askAI(question) {
     };
   }
 }
+
+/**
+ * Fetches initial data (like the generated book outline) from the backend root GET endpoint.
+ */
+function getInitialData() {
+  var backendUrl = PropertiesService.getScriptProperties().getProperty('BACKEND_URL');
+  if (!backendUrl || backendUrl === "https://your-cloud-run-url.run.app/chat") {
+    return {"status": "error", "message": "No BACKEND_URL configured."};
+  }
+  
+  // Point to root GET endpoint instead of /chat POST
+  var rootUrl = backendUrl.replace(/\/chat\/?$/, '').replace(/\/$/, '');
+  
+  var options = {
+    "method": "get",
+    "muteHttpExceptions": true
+  };
+  
+  try {
+    var response = UrlFetchApp.fetch(rootUrl, options);
+    if (response.getResponseCode() === 200) {
+      return JSON.parse(response.getContentText());
+    }
+  } catch (error) {
+    return {"status": "error", "message": error.toString()};
+  }
+  return null;
+}

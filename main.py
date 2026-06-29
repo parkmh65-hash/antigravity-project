@@ -588,10 +588,29 @@ class ChatResponse(BaseModel):
     db_row_count: int = 0
     last_added_time: str = "최근 추가 이력 없음"
     execution_time_sec: float = 0.0
+    outline: str = ""
 
 @app.get("/")
 def read_root():
-    return {"status": "running", "info": "LangGraph Book Writer API is ready!"}
+    outline = get_outline(current_path)
+    db_row_count = 0
+    try:
+        supabase_url = os.getenv("SUPABASE_URL")
+        supabase_key = os.getenv("SUPABASE_KEY")
+        if supabase_url and supabase_key and supabase_url != "your_supabase_url_here":
+            from supabase import create_client
+            supabase = create_client(supabase_url, supabase_key)
+            res = supabase.table("documents").select("id", count="exact").limit(1).execute()
+            db_row_count = res.count if res.count is not None else 0
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch Supabase row count: {e}")
+        
+    return {
+        "status": "running",
+        "info": "LangGraph Book Writer API is ready!",
+        "outline": outline,
+        "db_row_count": db_row_count
+    }
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
@@ -654,11 +673,15 @@ async def chat(request: ChatRequest):
         except Exception as e:
             print(f"[ERROR] Failed to fetch Supabase row count: {e}")
             
+        # 마지막 목차 읽어오기
+        outline = get_outline(current_path)
+        
         return ChatResponse(
             reply=reply_content,
             db_row_count=db_row_count,
             last_added_time=last_added_time,
-            execution_time_sec=execution_time
+            execution_time_sec=execution_time,
+            outline=outline
         )
     except Exception as e:
         raise HTTPException(

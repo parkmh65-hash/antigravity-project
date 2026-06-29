@@ -107,6 +107,7 @@
       const dbRowCount = response.db_row_count || 0;
       const lastAddedTime = response.last_added_time || "최근 추가 이력 없음";
       const executionTimeSec = response.execution_time_sec || 0.0;
+      const outline = response.outline || "";
 
       answerDiv.innerHTML = `
         <span class="material-symbols-outlined chat-icon">smart_toy</span>
@@ -128,6 +129,13 @@
           </div>
         </div>
       `;
+
+      // Update book outline if present
+      const boxOutline = document.getElementById('book-outline');
+      if (boxOutline && outline) {
+        boxOutline.className = "outline-box result-state";
+        boxOutline.innerHTML = formatResponse(outline);
+      }
 
       // Reset current reference
       currentTurnDiv = null;
@@ -182,5 +190,18 @@
 
       return escaped;
     }
+
+    // Fetch initial data (like current book outline) on page load
+    google.script.run
+      .withSuccessHandler((data) => {
+        if (data && data.outline) {
+          const boxOutline = document.getElementById('book-outline');
+          if (boxOutline) {
+            boxOutline.className = "outline-box result-state";
+            boxOutline.innerHTML = formatResponse(data.outline);
+          }
+        }
+      })
+      .getInitialData();
   });
 </script>
