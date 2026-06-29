@@ -108,3 +108,49 @@ def save_state(current_path: str, state: dict) -> None:
     
     with open(state_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+def load_state(current_path: str) -> dict:
+    """
+    Deserializes and loads the agent workflow state from a JSON file.
+    """
+    state_path = os.path.join(current_path, "state.json")
+    if not os.path.exists(state_path):
+        return None
+        
+    try:
+        from langchain_core.messages import messages_from_dict
+        from langchain_core.documents import Document
+        from models import Task
+        
+        with open(state_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            
+        # Deserialize messages
+        messages = messages_from_dict(data.get("messages", []))
+        
+        # Deserialize task history
+        task_history = []
+        for task_dict in data.get("task_history", []):
+            task_history.append(Task(**task_dict))
+            
+        # Deserialize references
+        raw_references = data.get("references", {"queries": [], "docs": []})
+        references = {
+            "queries": list(raw_references.get("queries", [])),
+            "docs": [],
+            "last_added_time": raw_references.get("last_added_time", "최근 추가 이력 없음")
+        }
+        for doc_dict in raw_references.get("docs", []):
+            references["docs"].append(Document(
+                page_content=doc_dict.get("page_content", ""),
+                metadata=doc_dict.get("metadata", {})
+            ))
+            
+        return {
+            "messages": messages,
+            "task_history": task_history,
+            "references": references
+        }
+    except Exception as e:
+        print(f"[ERROR] Failed to load state: {e}")
+        return None

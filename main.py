@@ -6,7 +6,7 @@ from typing_extensions import TypedDict
 from typing import List
 from dotenv import load_dotenv
 
-from utils import save_state, get_outline, save_outline 
+from utils import save_state, get_outline, save_outline, load_state, format_messages_for_logging
 from models import Task
 from tools import retrieve, web_search, add_web_pages_json_to_croma  
 from datetime import datetime
@@ -79,7 +79,7 @@ def supervisor(state: State): # supervisor 에이전트 추가
 
     # inputs 설정
     inputs = {
-        "messages": messages,
+        "messages": format_messages_for_logging(messages),
         "outline": get_outline(current_path)
     }
 
@@ -140,7 +140,7 @@ def vector_search_agent(state: State):
     inputs = {
         "mission": mission,
         "references": references,
-        "messages": messages,
+        "messages": format_messages_for_logging(messages),
         "outline": outline
     }
 
@@ -277,7 +277,7 @@ def web_search_agent(state: State):
     inputs = {
         "mission": mission,
         "references": references,
-        "messages": messages,
+        "messages": format_messages_for_logging(messages),
         "outline": outline
     }
 
@@ -367,7 +367,7 @@ def content_strategist(state: State):
 
     # 입력값 정의
     inputs = {
-        "messages": messages,
+        "messages": format_messages_for_logging(messages),
         "outline": outline
     }
 
@@ -437,7 +437,7 @@ def communicator(state: State):
 
     # 입력값 정의
     inputs = {
-        "messages": messages,
+        "messages": format_messages_for_logging(messages),
         "outline": get_outline(current_path)
     }
 
@@ -598,17 +598,29 @@ async def chat(request: ChatRequest):
     import time
     start_time = time.time()
 
-    # 각 HTTP 요청마다 독립된 에이전트 상태를 구성
-    initial_state = State(
-        messages=[
-            SystemMessage(
-                f"너희 AI들은 사용자의 요구에 맞는 책을 쓰는 작가팀이다. 사용자가 사용하는 언어로 대화하라. 현재시각은 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}이다."
-            ),
-            HumanMessage(content=request.message)
-        ],
-        task_history=[],
-        references={"queries": [], "docs": []}
-    )
+    # 기존에 저장된 상태 불러오기
+    saved_state = load_state(current_path)
+    
+    if saved_state:
+        initial_state = State(
+            messages=saved_state["messages"],
+            task_history=saved_state["task_history"],
+            references=saved_state["references"]
+        )
+    else:
+        # 최초 실행 시 초기 상태 구성
+        initial_state = State(
+            messages=[
+                SystemMessage(
+                    f"너희 AI들은 사용자의 요구에 맞는 책을 쓰는 작가팀이다. 사용자가 사용하는 언어로 대화하라. 현재시각은 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}이다."
+                )
+            ],
+            task_history=[],
+            references={"queries": [], "docs": [], "last_added_time": "최근 추가 이력 없음"}
+        )
+    
+    # 새 사용자 메시지 추가
+    initial_state["messages"].append(HumanMessage(content=request.message))
     
     try:
         # 동기적으로 실행되는 graph.invoke를 비동기 루프 상에서 실행
