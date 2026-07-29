@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>세종시 문화유산 제보 관리자 포털</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <style>
+    /* Premium CSS Variables & Custom Theme */
+    :root {
+      --bg-color: #0b0f19;
+      --card-bg: rgba(17, 24, 39, 0.7);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --primary: #6366f1; /* Indigo */
+      --primary-hover: #4f46e5;
+      --primary-glow: rgba(99, 102, 241, 0.4);
+      --accent: #06b6d4; /* Cyan */
+      --accent-glow: rgba(6, 182, 212, 0.3);
+      --success: #10b981; /* Emerald */
+      --success-bg: rgba(16, 185, 129, 0.15);
+      --danger: #f43f5e; /* Rose */
+      --danger-bg: rgba(244, 63, 94, 0.15);
+      --card-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', 'Noto Sans KR', sans-serif;
+      background-color: var(--bg-color);
+      background-image: 
+        radial-gradient(at 10% 20%, rgba(99, 102, 241, 0.1) 0px, transparent 50%),
+        radial-gradient(at 90% 80%, rgba(6, 182, 212, 0.08) 0px, transparent 50%);
+      background-attachment: fixed;
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.6;
+    }
+
+    /* Layout Container */
+    .container {
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem;
+      flex-grow: 1;
+    }
+
+    /* Header styling with gradient and glassmorphism */
+    header {
+      background: rgba(17, 24, 39, 0.6);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 2rem;
+      margin-bottom: 2.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: var(--card-shadow);
+    }
+
+    .header-logo h1 {
+      font-size: 1.75rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(to right, #6366f1, #06b6d4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header-logo p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+    }
+
+    .btn-refresh {
+      background: var(--card-bg);
+      border: 1px solid var(--primary);
+      color: var(--text-main);
+      padding: 0.6rem 1.2rem;
+      border-radius: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn-refresh:hover {
+      background: var(--primary);
+      box-shadow: 0 0 15px var(--primary-glow);
+      transform: translateY(-2px);
+    }
+
+    /* Loading Indicator */
+    .loader-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 5rem 0;
+      gap: 1.5rem;
+    }
+
+    .loader {
+      width: 48px;
+      height: 48px;
+      border: 4px solid var(--border-color);
+      border-bottom-color: var(--primary);
+      border-radius: 50%;
+      display: inline-block;
+      box-sizing: border-box;
+      animation: rotation 1s linear infinite;
+    }
+
+    @keyframes rotation {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Empty state card */
+    .empty-state {
+      background: var(--card-bg);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 4rem 2rem;
+      text-align: center;
+      box-shadow: var(--card-shadow);
+      display: none;
+    }
+
+    .empty-state h3 {
+      font-size: 1.4rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .empty-state p {
+      color: var(--text-muted);
+    }
+
+    /* Grid layout for pending cards */
+    .reports-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 2rem;
+    }
+
+    /* Card styling with glassmorphism and subtle hover animation */
+    .report-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      padding: 1.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+      box-shadow: var(--card-shadow);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .report-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      opacity: 0.7;
+    }
+
+    .report-card:hover {
+      transform: translateY(-5px);
+      border-color: rgba(99, 102, 241, 0.3);
+      box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.6), 0 0 15px rgba(99, 102, 241, 0.1);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .card-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-top: 0.25rem;
+    }
+
+    .card-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .badge {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.25rem 0.6rem;
+      border-radius: 8px;
+      text-transform: uppercase;
+    }
+
+    .badge-pending {
+      background-color: rgba(245, 158, 11, 0.15);
+      color: #f59e0b;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .card-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.8rem;
+      font-size: 0.95rem;
+    }
+
+    .section-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .text-content {
+      color: #d1d5db;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.03);
+    }
+
+    /* Actions form in cards */
+    .card-actions {
+      margin-top: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      border-top: 1px solid var(--border-color);
+      padding-top: 1.2rem;
+    }
+
+    .comment-input {
+      width: 100%;
+      background: rgba(10, 15, 30, 0.8);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 0.75rem 1rem;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.9rem;
+      transition: all 0.3s;
+    }
+
+    .comment-input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 10px var(--primary-glow);
+    }
+
+    .button-group {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      border: none;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn-approve {
+      background: var(--success);
+      color: #042f2e;
+    }
+
+    .btn-approve:hover {
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .btn-reject {
+      background: var(--danger);
+      color: #4c0519;
+    }
+
+    .btn-reject:hover {
+      box-shadow: 0 0 15px rgba(244, 63, 94, 0.4);
+      transform: translateY(-2px);
+    }
+
+    /* Status Notifications overlay */
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      padding: 1rem 1.5rem;
+      border-radius: 16px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      transform: translateY(150%);
+      transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      border: 1px solid var(--border-color);
+      font-weight: 600;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+    }
+
+    .toast-success {
+      background: var(--success-bg);
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+
+    .toast-error {
+      background: var(--danger-bg);
+      color: #fb7185;
+      border-color: rgba(244, 63, 94, 0.3);
+    }
+
+    /* Tabs styling */
+    .nav-tabs {
+      display: flex;
+      gap: 0.75rem;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 0.4rem;
+      border-radius: 14px;
+      border: 1px solid var(--border-color);
+      margin: 0 1rem;
+    }
+
+    .nav-tab {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.5rem 1.2rem;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .nav-tab:hover {
+      color: var(--text-main);
+    }
+
+    .nav-tab.active {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 0 10px var(--primary-glow);
+    }
+
+    /* Settings section styling */
+    .settings-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      padding: 2.5rem;
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      animation: fadeIn 0.4s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .settings-title {
+      font-size: 1.5rem;
+      font-weight: 800;
+      background: linear-gradient(to right, #6366f1, #06b6d4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.25rem;
+    }
+
+    .settings-subtitle {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .settings-section {
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      border-radius: 16px;
+      padding: 1.8rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+    }
+
+    .section-header {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 0.5rem;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.3px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .form-group label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .form-input {
+      background: rgba(10, 15, 30, 0.8);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.9rem;
+      transition: all 0.3s;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 10px var(--primary-glow);
+    }
+
+    .form-help {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .form-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 1rem;
+    }
+
+    .btn-save {
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: white;
+      padding: 0.8rem 2rem;
+      border-radius: 12px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn-save:hover {
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+      transform: translateY(-2px);
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      header {
+        flex-direction: column;
+        gap: 1.5rem;
+        text-align: center;
+      }
+      .nav-tabs {
+        width: 100%;
+        justify-content: center;
+        margin: 0;
+      }
+      .reports-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <div class="header-logo">
+        <h1>세종 문화유산 관리자 포털</h1>
+        <p>시민 제보 및 발굴 문화유산 승인 대시보드</p>
+      </div>
+      <div class="nav-tabs">
+        <button class="nav-tab active" id="tab-reports" onclick="switchTab('reports')">제보 검토</button>
+        <button class="nav-tab" id="tab-settings" onclick="switchTab('settings')">시스템 설정</button>
+      </div>
+      <button class="btn-refresh" id="btn-refresh" onclick="loadReports()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+        새로고침
+      </button>
+    </header>
+
+    <!-- Loading Area -->
+    <div id="loader" class="loader-container">
+      <div class="loader"></div>
+      <p style="color: var(--text-muted);" id="loader-text">제보 데이터를 불러오는 중...</p>
+    </div>
+
+    <!-- Empty State -->
+    <div id="empty-state" class="empty-state">
+      <h3>🎉 검토할 제보가 없습니다!</h3>
+      <p>새로운 시민 제보가 등록되면 대시보드에 나타납니다.</p>
+    </div>
+
+    <!-- Cards Grid -->
+    <div id="reports-container" class="reports-grid" style="display: none;">
+      <!-- JavaScript will inject cards here -->
+    </div>
+
+    <!-- Settings Card -->
+    <div id="settings-container" class="settings-card" style="display: none;">
+      <h2 class="settings-title">⚙️ 시스템 환경 설정</h2>
+      <p class="settings-subtitle">외부 API 연동 KEY 값 및 백엔드 서버 설정을 일괄 구성합니다.</p>
+      
+      <form id="settings-form" onsubmit="saveSettingsForm(event)">
+        <div class="settings-section">
+          <div class="section-header">FastAPI 백엔드 설정</div>
+          
+          <div class="form-group">
+            <label for="setting-api-url">백엔드 서버 URL (API_BASE_URL)</label>
+            <input type="text" id="setting-api-url" class="form-input" placeholder="http://localhost:8080" required>
+            <span class="form-help">Google Apps Script가 연동할 FastAPI 백엔드의 호스트 주소입니다.</span>
+          </div>
+          
+          <div class="form-group">
+            <label for="setting-admin-token">관리자 인증 토큰 (ADMIN_TOKEN)</label>
+            <input type="password" id="setting-admin-token" class="form-input" placeholder="admin-super-token">
+            <span class="form-help">FastAPI 관리자 API 호출 시 사용할 Bearer Token입니다. (기본값: admin-super-token)</span>
+          </div>
+        </div>
+        
+        <div class="settings-section">
+          <div class="section-header">외부 서비스 API KEY 설정</div>
+          
+          <div class="form-group">
+            <label for="setting-google-key">Google Gemini API KEY (GOOGLE_API_KEY)</label>
+            <input type="password" id="setting-google-key" class="form-input" placeholder="AIzaSy...">
+            <span class="form-help">LangGraph 에이전트의 문화유산 스토리텔링 및 코스 생성에 사용됩니다. (기설정 시 마스킹 표시)</span>
+          </div>
+          
+          <div class="form-group">
+            <label for="setting-tourapi-key">한국관광공사 TourAPI KEY (TOURAPI_KEY)</label>
+            <input type="password" id="setting-tourapi-key" class="form-input" placeholder="관광공사 인증 키 입력">
+            <span class="form-help">주변 관광지 검색 오픈 API 연동용 서비스 키입니다.</span>
+          </div>
+          
+          <div class="form-group">
+            <label for="setting-bus-key">세종시 버스 API KEY (SEJONG_BUS_API_KEY)</label>
+            <input type="password" id="setting-bus-key" class="form-input" placeholder="세종 버스 API 키 입력">
+            <span class="form-help">코스 내 장소 간 대중교통 이동 소요 시간 실시간 연동용 서비스 키입니다.</span>
+          </div>
+          
+          <div class="form-group">
+            <label for="setting-cultural-key">문화재 정보 동기화 API KEY (CULTURAL_API_KEY)</label>
+            <input type="password" id="setting-cultural-key" class="form-input" placeholder="공공데이터포털 문화재 API 키 입력">
+            <span class="form-help">세종시 문화재 지정 현황 실시간 동기화 배치에 사용됩니다.</span>
+          </div>
+        </div>
+        
+        <div class="settings-section">
+          <div class="section-header">실데이터베이스 (Supabase & Neo4j) 설정</div>
+          
+          <div class="form-group">
+            <label for="setting-supabase-url">Supabase API URL (SUPABASE_URL)</label>
+            <input type="text" id="setting-supabase-url" class="form-input" placeholder="https://xxxx.supabase.co">
+            <span class="form-help">Supabase 프로젝트의 REST API 엔드포인트 URL 주소입니다.</span>
+          </div>
+          
+          <div class="form-group">
+            <label for="setting-supabase-key">Supabase API KEY (SUPABASE_KEY)</label>
+            <input type="password" id="setting-supabase-key" class="form-input" placeholder="Supabase Anon/Service Key 입력">
+            <span class="form-help">Supabase REST API 호출 권한을 제공하는 API Key(Secret)입니다.</span>
+          </div>
+          
+          <div class="form-group">
+            <label for="setting-neo4j-uri">Neo4j Connection URI (NEO4J_URI)</label>
+            <input type="text" id="setting-neo4j-uri" class="form-input" placeholder="neo4j+s://xxxx.databases.neo4j.io">
+            <span class="form-help">Neo4j AuraDB 혹은 설치형 서버 접속 URI 호스트 프로토콜 주소입니다.</span>
+          </div>
+          
+          <div class="form-group">
+            <label for="setting-neo4j-user">Neo4j 사용자 이름 (NEO4J_USERNAME)</label>
+            <input type="text" id="setting-neo4j-user" class="form-input" placeholder="neo4j">
+            <span class="form-help">Neo4j 데이터베이스 접속 시 사용할 로그인 ID입니다.</span>
+          </div>
+          
+          <div class="form-group">
+            <label for="setting-neo4j-pass">Neo4j 비밀번호 (NEO4J_PASSWORD)</label>
+            <input type="password" id="setting-neo4j-pass" class="form-input" placeholder="Neo4j 접속 비밀번호 입력">
+            <span class="form-help">Neo4j 데이터베이스 접속용 비밀번호(Password)입니다.</span>
+          </div>
+        </div>
+        
+        <div class="form-actions">
+          <button type="submit" class="btn-save" id="btn-save-settings">설정 저장하기</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast"></div>
+
+  <script>
+    var currentTab = 'reports';
+
+    // Initialize dashboard loading
+    document.addEventListener("DOMContentLoaded", function() {
+      switchTab('reports');
+    });
+
+    /**
+     * Switch tab between 'reports' and 'settings'
+     */
+    function switchTab(tabName) {
+      currentTab = tabName;
+      
+      // Update Tab button classes
+      var reportsTab = document.getElementById("tab-reports");
+      var settingsTab = document.getElementById("tab-settings");
+      var btnRefresh = document.getElementById("btn-refresh");
+      
+      if (tabName === 'reports') {
+        reportsTab.classList.add("active");
+        settingsTab.classList.remove("active");
+        btnRefresh.style.display = "flex";
+        
+        hideElement("settings-container");
+        loadReports();
+      } else {
+        settingsTab.classList.add("active");
+        reportsTab.classList.remove("active");
+        btnRefresh.style.display = "none";
+        
+        hideElement("reports-container");
+        hideElement("empty-state");
+        hideElement("loader");
+        
+        showElement("settings-container");
+        loadSettings();
+      }
+    }
+
+    /**
+     * Load settings from Google Apps Script properties and FastAPI backend
+     */
+    function loadSettings() {
+      document.getElementById("loader-text").textContent = "설정 데이터를 불러오는 중...";
+      showElement("loader");
+      
+      // Disable save button during load
+      var saveBtn = document.getElementById("btn-save-settings");
+      if (saveBtn) saveBtn.disabled = true;
+
+      google.script.run
+        .withSuccessHandler(onSettingsLoaded)
+        .withFailureHandler(onSettingsFailed)
+        .getSettings();
+    }
+
+    /**
+     * Callback when settings are successfully loaded
+     */
+    function onSettingsLoaded(settings) {
+      hideElement("loader");
+      var saveBtn = document.getElementById("btn-save-settings");
+      if (saveBtn) saveBtn.disabled = false;
+
+      if (!settings) {
+        showToast("설정 데이터를 불러오는 데 실패했습니다.", "error");
+        return;
+      }
+
+      document.getElementById("setting-api-url").value = settings.API_BASE_URL || "";
+      document.getElementById("setting-admin-token").value = settings.ADMIN_TOKEN || "";
+      
+      // Handle backend settings API keys (they could be masked)
+      document.getElementById("setting-google-key").value = settings.GOOGLE_API_KEY || "";
+      document.getElementById("setting-tourapi-key").value = settings.TOURAPI_KEY || "";
+      document.getElementById("setting-bus-key").value = settings.SEJONG_BUS_API_KEY || "";
+      document.getElementById("setting-cultural-key").value = settings.CULTURAL_API_KEY || "";
+      document.getElementById("setting-supabase-url").value = settings.SUPABASE_URL || "";
+      document.getElementById("setting-supabase-key").value = settings.SUPABASE_KEY || "";
+      document.getElementById("setting-neo4j-uri").value = settings.NEO4J_URI || "";
+      document.getElementById("setting-neo4j-user").value = settings.NEO4J_USERNAME || "";
+      document.getElementById("setting-neo4j-pass").value = settings.NEO4J_PASSWORD || "";
+    }
+
+    /**
+     * Callback when settings load fails
+     */
+    function onSettingsFailed(error) {
+      hideElement("loader");
+      var saveBtn = document.getElementById("btn-save-settings");
+      if (saveBtn) saveBtn.disabled = false;
+      showToast("설정 로드 실패: " + error.message, "error");
+    }
+
+    /**
+     * Submit settings form
+     */
+    function saveSettingsForm(event) {
+      event.preventDefault();
+      
+      var saveBtn = document.getElementById("btn-save-settings");
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = "저장 중...";
+      }
+
+      var settings = {
+        "API_BASE_URL": document.getElementById("setting-api-url").value.trim(),
+        "ADMIN_TOKEN": document.getElementById("setting-admin-token").value.trim(),
+        "GOOGLE_API_KEY": document.getElementById("setting-google-key").value.trim(),
+        "TOURAPI_KEY": document.getElementById("setting-tourapi-key").value.trim(),
+        "SEJONG_BUS_API_KEY": document.getElementById("setting-bus-key").value.trim(),
+        "CULTURAL_API_KEY": document.getElementById("setting-cultural-key").value.trim(),
+        "SUPABASE_URL": document.getElementById("setting-supabase-url").value.trim(),
+        "SUPABASE_KEY": document.getElementById("setting-supabase-key").value.trim(),
+        "NEO4J_URI": document.getElementById("setting-neo4j-uri").value.trim(),
+        "NEO4J_USERNAME": document.getElementById("setting-neo4j-user").value.trim(),
+        "NEO4J_PASSWORD": document.getElementById("setting-neo4j-pass").value.trim()
+      };
+
+      google.script.run
+        .withSuccessHandler(onSettingsSaved)
+        .withFailureHandler(onSettingsSaveFailed)
+        .saveSettings(settings);
+    }
+
+    /**
+     * Callback when settings are successfully saved
+     */
+    function onSettingsSaved(message) {
+      var saveBtn = document.getElementById("btn-save-settings");
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "설정 저장하기";
+      }
+      showToast(message, "success");
+      // Reload settings to get updated masked keys
+      loadSettings();
+    }
+
+    /**
+     * Callback when settings save fails
+     */
+    function onSettingsSaveFailed(error) {
+      var saveBtn = document.getElementById("btn-save-settings");
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "설정 저장하기";
+      }
+      showToast(error.message, "error");
+    }
+
+    /**
+     * Calls Google Apps Script backend function fetchPendingReports()
+     */
+    function loadReports() {
+      showElement("loader");
+      hideElement("reports-container");
+      hideElement("empty-state");
+
+      google.script.run
+        .withSuccessHandler(onReportsLoaded)
+        .withFailureHandler(onLoadFailed)
+        .fetchPendingReports();
+    }
+
+    /**
+     * Callback for successful reports fetch
+     */
+    function onReportsLoaded(reports) {
+      hideElement("loader");
+      
+      if (!reports || reports.length === 0) {
+        showElement("empty-state");
+        return;
+      }
+
+      var container = document.getElementById("reports-container");
+      container.innerHTML = ""; // Clear existing
+
+      reports.forEach(function(report) {
+        var card = createReportCard(report);
+        container.appendChild(card);
+      });
+
+      showElement("reports-container");
+    }
+
+    /**
+     * Callback for fetch failures
+     */
+    function onLoadFailed(error) {
+      hideElement("loader");
+      showToast("데이터를 불러오지 못했습니다. " + error.message, "error");
+      showElement("empty-state");
+      document.getElementById("empty-state").innerHTML = `
+        <h3 style="color: var(--danger)">⚠️ 서버 연결 끊김</h3>
+        <p style="margin-top:0.5rem">${error.message}</p>
+        <button class="btn-refresh" style="margin: 1.5rem auto 0 auto;" onclick="loadReports()">다시 연결하기</button>
+      `;
+    }
+
+    /**
+     * Generates the HTML Card Node for a single report
+     */
+    function createReportCard(report) {
+      var card = document.createElement("div");
+      card.className = "report-card";
+      card.id = "report-card-" + report.id;
+
+      // Safe description formatting
+      var desc = report.description || "설명 없음";
+      var significance = report.historical_significance || "지정되지 않음";
+      var address = report.address || "주소 불명";
+      var dateStr = report.created_at ? report.created_at.substring(0, 10) : "날짜 없음";
+
+      card.innerHTML = `
+        <div class="card-header">
+          <div>
+            <span class="badge badge-pending">승인 대기중</span>
+            <h3 class="card-title">${escapeHtml(report.title)}</h3>
+          </div>
+        </div>
+
+        <div class="card-meta">
+          <div class="meta-item">
+            <strong>제보자:</strong> <span>${escapeHtml(report.reporter_name)}</span>
+          </div>
+          <div class="meta-item">
+            <strong>제보일:</strong> <span>${dateStr}</span>
+          </div>
+          <div class="meta-item">
+            <strong>위치:</strong> <span>${escapeHtml(address)}</span>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <div>
+            <div class="section-title">제보 내용</div>
+            <div class="text-content">${escapeHtml(desc)}</div>
+          </div>
+          <div>
+            <div class="section-title">역사적 가치 및 근거</div>
+            <div class="text-content">${escapeHtml(significance)}</div>
+          </div>
+        </div>
+
+        <div class="card-actions">
+          <div>
+            <div class="section-title" style="margin-bottom: 0.5rem;">심사 의견</div>
+            <input type="text" class="comment-input" id="comment-${report.id}" placeholder="승인 보완 사항 또는 반려 사유를 적어주세요.">
+          </div>
+          <div class="button-group">
+            <button class="btn btn-approve" onclick="submitReview(${report.id}, 'APPROVED')">승인 (공개)</button>
+            <button class="btn btn-reject" onclick="submitReview(${report.id}, 'REJECTED')">반려</button>
+          </div>
+        </div>
+      `;
+
+      return card;
+    }
+
+    /**
+     * Submits approved or rejected state via google.script.run
+     */
+    function submitReview(reportId, status) {
+      var commentInput = document.getElementById("comment-" + reportId);
+      var comment = commentInput ? commentInput.value : "";
+      
+      // Visual feedback - disable card
+      var card = document.getElementById("report-card-" + reportId);
+      if (card) {
+        card.style.opacity = "0.5";
+        card.style.pointerEvents = "none";
+      }
+
+      google.script.run
+        .withSuccessHandler(function(response) {
+          showToast(`제보가 성공적으로 ${status === 'APPROVED' ? '승인' : '반려'}되었습니다.`, "success");
+          loadReports(); // Refresh
+        })
+        .withFailureHandler(function(error) {
+          showToast("리뷰 제출 실패: " + error.message, "error");
+          // Re-enable card
+          if (card) {
+            card.style.opacity = "1";
+            card.style.pointerEvents = "all";
+          }
+        })
+        .reviewReport(reportId, status, comment);
+    }
+
+    // Helper functions
+    function showElement(id) {
+      document.getElementById(id).style.display = "flex";
+    }
+
+    function hideElement(id) {
+      document.getElementById(id).style.display = "none";
+    }
+
+    function showToast(message, type) {
+      var toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.className = "toast show " + (type === "success" ? "toast-success" : "toast-error");
+      
+      setTimeout(function() {
+        toast.className = "toast";
+      }, 3500);
+    }
+
+    function escapeHtml(unsafe) {
+      if (!unsafe) return "";
+      return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+  </script>
+</body>
+</html>
