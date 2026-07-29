@@ -59,6 +59,43 @@
       flex-grow: 1;
     }
 
+    /* Stats Panel & Card */
+    .stats-panel {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      box-shadow: var(--card-shadow);
+      backdrop-filter: blur(12px);
+      transition: all 0.3s ease;
+    }
+    .stat-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(99, 102, 241, 0.3);
+    }
+    .stat-label {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .stat-value {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: var(--accent);
+      background: linear-gradient(to right, var(--accent), #6366f1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
     /* Header styling with gradient and glassmorphism */
     header {
       background: rgba(17, 24, 39, 0.6);
@@ -540,6 +577,18 @@
       </button>
     </header>
 
+    <!-- Statistics Panel -->
+    <div id="stats-panel" class="stats-panel">
+      <div class="stat-card">
+        <span class="stat-label">🏛️ 국가/지자체 지정 문화유산</span>
+        <span class="stat-value" id="stat-official-count">0건</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">👥 시민 발굴 문화유산</span>
+        <span class="stat-value" id="stat-citizen-count">0건</span>
+      </div>
+    </div>
+
     <!-- Loading Area -->
     <div id="loader" class="loader-container">
       <div class="loader"></div>
@@ -816,6 +865,17 @@
         .withSuccessHandler(onReportsLoaded)
         .withFailureHandler(onLoadFailed)
         .fetchPendingReports();
+
+      google.script.run
+        .withSuccessHandler(onStatsLoaded)
+        .fetchHeritageStats();
+    }
+
+    function onStatsLoaded(stats) {
+      if (stats) {
+        document.getElementById("stat-official-count").textContent = (stats.official_count || 0) + "건";
+        document.getElementById("stat-citizen-count").textContent = (stats.citizen_count || 0) + "건";
+      }
     }
 
     /**

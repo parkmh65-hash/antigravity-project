@@ -29,9 +29,18 @@ CREATE TABLE IF NOT EXISTS heritage (
     dong VARCHAR(100) NOT NULL,      -- Parsed administrative district (e.g., 전의면, 보람동)
     description TEXT,
     era era_type NOT NULL,           -- Normalized era enum
-    thought_prompt TEXT,             -- 생각할 거리 (Static text or AI generated prompt outcome)
-    image_url VARCHAR(255),          -- CDN or static storage file path
+    thought_prompt TEXT,             -- 생각할 거리
+    image_url VARCHAR(255),          -- CDN or static storage file path (deprecating but keeping for compatibility)
+    images TEXT[],                   -- Array of image paths
     views INTEGER DEFAULT 0,
+    like_count INTEGER DEFAULT 0,
+    type VARCHAR(50) DEFAULT 'official',   -- official | citizen
+    status VARCHAR(50) DEFAULT 'approved',  -- pending | approved | needs_review
+    has_parking BOOLEAN DEFAULT FALSE,
+    has_restroom BOOLEAN DEFAULT FALSE,
+    nearby_restaurant BOOLEAN DEFAULT FALSE,
+    reporter_user_id VARCHAR(255),
+    report_reason TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -70,18 +79,6 @@ CREATE TRIGGER update_candidates_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- 3. Cultural Heritage Reviews (문화유산 후기)
-CREATE TABLE IF NOT EXISTS heritage_review (
-    id SERIAL PRIMARY KEY,
-    heritage_id VARCHAR(50) REFERENCES heritage(id) ON DELETE CASCADE,
-    user_id VARCHAR(255) NOT NULL,
-    image_url VARCHAR(255),          -- Uploaded photo path (optional)
-    content TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_review_heritage_id ON heritage_review(heritage_id);
-
 -- 4. User Travel Courses (나만의 코스)
 CREATE TABLE IF NOT EXISTS user_course (
     course_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -91,6 +88,8 @@ CREATE TABLE IF NOT EXISTS user_course (
     transit_type VARCHAR(50) NOT NULL,      -- 교통수단: 보행, 차량, 자전거 등
     duration_mins INTEGER NOT NULL,          -- 소요 시간(분 단위)
     generated_content TEXT,                 -- AI generated narrative (magazine/fairy tale format)
+    is_public BOOLEAN DEFAULT FALSE,
+    like_count INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -99,6 +98,23 @@ CREATE TRIGGER update_user_course_updated_at
     BEFORE UPDATE ON user_course
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
+
+-- 3. Cultural Heritage Reviews (문화유산 후기) - course unit with sub-reviews
+CREATE TABLE IF NOT EXISTS heritage_review (
+    id SERIAL PRIMARY KEY,
+    course_id UUID REFERENCES user_course(course_id) ON DELETE CASCADE,
+    user_id VARCHAR(255) NOT NULL,
+    companion_type VARCHAR(100),          -- 누구와 방문했는지
+    overall_satisfaction INTEGER DEFAULT 5, -- 만족도 (별점)
+    overall_text TEXT,                    -- 전체 감상 후기
+    is_recommended BOOLEAN DEFAULT TRUE,
+    is_public BOOLEAN DEFAULT TRUE,
+    image_url VARCHAR(255),               -- 대표 사진
+    heritage_reviews JSONB,               -- Nested heritage reviews array (JSON format)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_review_course_id ON heritage_review(course_id);
 
 -- 5. User Recommendation Proposal Status Tracker (내가 추천한 문화유산 현황)
 CREATE TABLE IF NOT EXISTS user_recommendation_status (
@@ -146,3 +162,14 @@ CREATE TRIGGER update_citizen_report_updated_at
     EXECUTE FUNCTION update_updated_at_column();
 
 CREATE INDEX IF NOT EXISTS idx_citizen_report_status ON citizen_report(status);
+
+-- 8. AI Magazine logs
+CREATE TABLE IF NOT EXISTS ai_magazine (
+    id SERIAL PRIMARY KEY,
+    course_id UUID REFERENCES user_course(course_id) ON DELETE CASCADE,
+    generated_asset_url VARCHAR(255) NOT NULL,
+    sent_to_email VARCHAR(255) NOT NULL,
+    sent_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_magazine_course_id ON ai_magazine(course_id);

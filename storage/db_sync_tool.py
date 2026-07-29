@@ -37,6 +37,15 @@ def seed_supabase(supabase_client, mock_data):
     heritages = mock_data.get("cultural_heritages", [])
     print(f"Upserting {len(heritages)} heritages...")
     for h in heritages:
+        # Determine deterministic amenities based on H_ID number
+        try:
+            num = int(h["id"][1:])
+        except ValueError:
+            num = 1
+        has_parking = (num % 2 == 0)
+        has_restroom = (num % 3 == 0)
+        nearby_restaurant = (num % 5 == 0)
+
         payload = {
             "id": h["id"],
             "name": h["name"],
@@ -47,7 +56,16 @@ def seed_supabase(supabase_client, mock_data):
             "era": h["era"],
             "thought_prompt": h.get("thought_prompt"),
             "image_url": h.get("image_url"),
-            "views": h.get("views", 0)
+            "images": [h["image_url"]] if h.get("image_url") else [],
+            "views": h.get("views", 0),
+            "like_count": h.get("views", 0) // 4,
+            "type": "official",
+            "status": "approved",
+            "has_parking": has_parking,
+            "has_restroom": has_restroom,
+            "nearby_restaurant": nearby_restaurant,
+            "reporter_user_id": None,
+            "report_reason": None
         }
         supabase_client.table("heritage").upsert(payload).execute()
         
@@ -87,20 +105,7 @@ def seed_supabase(supabase_client, mock_data):
         }
         supabase_client.table("citizen_heritage_candidate").upsert(payload).execute()
         
-    # 4. Seed reviews
-    reviews = mock_data.get("heritage_reviews", [])
-    print(f"Upserting {len(reviews)} reviews...")
-    for rv in reviews:
-        payload = {
-            "id": rv["id"],
-            "heritage_id": rv["heritage_id"],
-            "user_id": rv["user_id"],
-            "image_url": rv.get("image_url"),
-            "content": rv["content"]
-        }
-        supabase_client.table("heritage_review").upsert(payload).execute()
-        
-    # 5. Seed user courses
+    # 5. Seed user courses (seeded first because reviews reference courses)
     courses = mock_data.get("user_courses", [])
     print(f"Upserting {len(courses)} user courses...")
     for co in courses:
@@ -111,9 +116,42 @@ def seed_supabase(supabase_client, mock_data):
             "heritage_ids": [s["heritage_id"] for s in co.get("stops", [])],
             "transit_type": co["transit_type"],
             "duration_mins": co["duration_mins"],
-            "generated_content": co.get("generated_content")
+            "generated_content": co.get("generated_content"),
+            "is_public": True,
+            "like_count": 12
         }
         supabase_client.table("user_course").upsert(payload).execute()
+
+    # 4. Seed reviews (nested)
+    reviews = mock_data.get("heritage_reviews", [])
+    print(f"Upserting {len(reviews)} reviews...")
+    for rv in reviews:
+        payload = {
+            "id": rv["id"],
+            "course_id": "c8932912-9d48-4a50-a466-ca22c2bffac3",  # Reference seeded course
+            "user_id": rv["user_id"],
+            "companion_type": "가족",
+            "overall_satisfaction": 5,
+            "overall_text": "전체적으로 매우 유익하고 유산 관리가 잘 되어 있는 코스였습니다.",
+            "is_recommended": True,
+            "is_public": True,
+            "image_url": rv.get("image_url"),
+            "heritage_reviews": [
+                {
+                    "heritageId": rv["heritage_id"],
+                    "images": [rv["image_url"]] if rv.get("image_url") else [],
+                    "isRecommended": True,
+                    "text": rv["content"],
+                    "amenitySatisfaction": 5,
+                    "parkingOk": True,
+                    "parkingNeedsImprovement": False,
+                    "restroomOk": True,
+                    "restroomNeedsImprovement": False,
+                    "nearbyRestaurant": True
+                }
+            ]
+        }
+        supabase_client.table("heritage_review").upsert(payload).execute()
         
     # 6. Seed recommendation tracker status
     trackers = mock_data.get("user_recommendation_status", [])
@@ -127,6 +165,16 @@ def seed_supabase(supabase_client, mock_data):
         }
         supabase_client.table("user_recommendation_status").upsert(payload).execute()
         
+    # 7. Seed AI Magazine
+    print("Upserting initial AI magazine log...")
+    magazine_payload = {
+        "id": 1,
+        "course_id": "c8932912-9d48-4a50-a466-ca22c2bffac3",
+        "generated_asset_url": "https://example.com/magazine/sejong-healing.pdf",
+        "sent_to_email": "demo@sejong.go.kr"
+    }
+    supabase_client.table("ai_magazine").upsert(magazine_payload).execute()
+
     print("Supabase seeding completed successfully.")
 
 def sync_supabase_to_neo4j(supabase_client, neo4j_driver, mock_data):

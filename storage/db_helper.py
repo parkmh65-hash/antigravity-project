@@ -150,6 +150,28 @@ class SejongDBHelper:
                 return h
         return None
 
+    def get_heritage_stats(self):
+        """Fetch count of official vs citizen heritage sites."""
+        if self.supabase_client:
+            try:
+                res_off = self.supabase_client.table("heritage").select("id", count="exact").eq("type", "official").execute()
+                res_cit = self.supabase_client.table("heritage").select("id", count="exact").eq("type", "citizen").execute()
+                return {
+                    "official_count": res_off.count or 0,
+                    "citizen_count": res_cit.count or 0
+                }
+            except Exception as e:
+                print(f"[SejongDBHelper] Supabase get_heritage_stats failed: {e}. Falling back to mock DB.")
+
+        # Fallback to local
+        heritages = self.data.get("cultural_heritages", [])
+        official_count = len([h for h in heritages if h.get("type", "official") == "official"])
+        citizen_count = len([h for h in heritages if h.get("type") == "citizen"])
+        return {
+            "official_count": official_count,
+            "citizen_count": citizen_count
+        }
+
     # ==========================================
     # Citizen Heritage Candidates & Voting
     # ==========================================
@@ -318,7 +340,16 @@ class SejongDBHelper:
                             "description": f"{cand.get('description')} (시민 제보 후보 승인)",
                             "thought_prompt": "시민이 참여해 발굴한 이 유산이 미래 세대에 어떤 의미를 줄지 관찰해 보세요.",
                             "image_url": cand.get("image_urls")[0] if cand.get("image_urls") else "/static/images/default.jpg",
-                            "views": 0
+                            "images": cand.get("image_urls") if cand.get("image_urls") else ["/static/images/default.jpg"],
+                            "views": 0,
+                            "like_count": 0,
+                            "type": "citizen",
+                            "status": "approved",
+                            "has_parking": True,
+                            "has_restroom": True,
+                            "nearby_restaurant": True,
+                            "reporter_user_id": cand.get("reporter_id"),
+                            "report_reason": cand.get("description")
                         }
                         self.supabase_client.table("heritage").insert(new_h).execute()
                         
@@ -379,7 +410,16 @@ class SejongDBHelper:
                 "description": f"{target_cand.get('description')} (시민 제보 후보 승인)",
                 "thought_prompt": "시민이 참여해 발굴한 이 유산이 미래 세대에 어떤 의미를 줄지 관찰해 보세요.",
                 "image_url": target_cand.get("image_urls")[0] if target_cand.get("image_urls") else "/static/images/default.jpg",
-                "views": 0
+                "images": target_cand.get("image_urls") if target_cand.get("image_urls") else ["/static/images/default.jpg"],
+                "views": 0,
+                "like_count": 0,
+                "type": "citizen",
+                "status": "approved",
+                "has_parking": True,
+                "has_restroom": True,
+                "nearby_restaurant": True,
+                "reporter_user_id": target_cand.get("reporter_id"),
+                "report_reason": target_cand.get("description")
             }
             heritages.append(new_heritage)
             
@@ -403,55 +443,81 @@ class SejongDBHelper:
     # Heritage Reviews (문화유산 후기)
     # ==========================================
 
-    def submit_heritage_review(self, heritage_id, user_id, image_url, content):
-        """Submit user review for a specific heritage."""
+    def submit_heritage_review(self, heritage_id, user_id, image_url, content, course_id=None, companion_type=None, overall_satisfaction=5, overall_text=None, is_recommended=True, is_public=True, heritage_reviews=None):
+        """Submit user review for a specific heritage or course with nested sub-reviews."""
         if self.supabase_client:
             try:
-                heritage = self.get_heritage_by_id(heritage_id)
-                if not heritage:
-                    raise ValueError(f"Heritage ID {heritage_id} does not exist.")
-                new_review = {
-                    "heritage_id": heritage_id,
+                if not course_id:
+                    course_id = "c8932912-9d48-4a50-a466-ca22c2bffac3"
+                if not heritage_reviews:
+                    heritage_reviews = [
+                        {
+                            "heritageId": heritage_id,
+                            "images": [image_url] if image_url else [],
+                            "isRecommended": is_recommended,
+                            "text": content,
+                            "amenitySatisfaction": overall_satisfaction,
+                            "parkingOk": True,
+                            "parkingNeedsImprovement": False,
+                            "restroomOk": True,
+                            "restroomNeedsImprovement": False,
+                            "nearbyRestaurant": True
+                        }
+                    ]
+                
+                payload = {
+                    "course_id": course_id,
                     "user_id": user_id,
+                    "companion_type": companion_type or "기타",
+                    "overall_satisfaction": overall_satisfaction,
+                    "overall_text": overall_text or content,
+                    "is_recommended": is_recommended,
+                    "is_public": is_public,
                     "image_url": image_url,
-                    "content": content
+                    "heritage_reviews": heritage_reviews
                 }
-                res = self.supabase_client.table("heritage_review").insert(new_review).execute()
+                res = self.supabase_client.table("heritage_review").insert(payload).execute()
                 return res.data[0] if res.data else None
             except Exception as e:
                 print(f"[SejongDBHelper] Supabase submit_heritage_review failed: {e}. Falling back to mock DB.")
 
-        heritage = self.get_heritage_by_id(heritage_id)
-        if not heritage:
-            raise ValueError(f"Heritage ID {heritage_id} does not exist.")
-            
+        # Fallback to local mock database
         reviews = self.data.get("heritage_reviews", [])
         new_id = max([r.get("id", 0) for r in reviews]) + 1 if reviews else 1
         
         new_review = {
             "id": new_id,
             "heritage_id": heritage_id,
+            "course_id": course_id or "c8932912-9d48-4a50-a466-ca22c2bffac3",
             "user_id": user_id,
+            "companion_type": companion_type or "기타",
+            "overall_satisfaction": overall_satisfaction,
+            "overall_text": overall_text or content,
+            "is_recommended": is_recommended,
+            "is_public": is_public,
             "image_url": image_url,
             "content": content,
+            "heritage_reviews": heritage_reviews or [{"heritageId": heritage_id, "text": content}],
             "created_at": datetime.utcnow().isoformat() + "Z"
         }
-        
         reviews.append(new_review)
         self.save_db()
         return new_review
 
     def get_heritage_reviews(self, heritage_id):
-        """Fetch all reviews for a heritage."""
+        """Fetch all reviews containing a specific heritage."""
         if self.supabase_client:
             try:
-                res = self.supabase_client.table("heritage_review").select("*").eq("heritage_id", heritage_id).execute()
+                res = self.supabase_client.table("heritage_review").select("*").contains("heritage_reviews", [{"heritageId": heritage_id}]).execute()
                 return res.data
             except Exception as e:
                 print(f"[SejongDBHelper] Supabase get_heritage_reviews failed: {e}. Falling back to mock DB.")
 
         reviews = self.data.get("heritage_reviews", [])
-        return [r for r in reviews if r.get("heritage_id") == heritage_id]
+        return [
+            r for r in reviews 
+            if r.get("heritage_id") == heritage_id or any(hr.get("heritageId") == heritage_id for hr in r.get("heritage_reviews", []))
+        ]
 
     # ==========================================
     # User Course & AI Generated Narrative
@@ -823,7 +889,16 @@ class SejongDBHelper:
                             "description": f"{rep.get('description')} (시민 제보 승인)",
                             "thought_prompt": "시민이 참여해 발굴한 이 유산이 미래 세대에 어떤 의미를 줄지 관찰해 보세요.",
                             "image_url": "/static/images/default.jpg",
-                            "views": 0
+                            "images": ["/static/images/default.jpg"],
+                            "views": 0,
+                            "like_count": 0,
+                            "type": "citizen",
+                            "status": "approved",
+                            "has_parking": True,
+                            "has_restroom": True,
+                            "nearby_restaurant": True,
+                            "reporter_user_id": rep.get("reporter_name"),
+                            "report_reason": rep.get("description")
                         }
                         self.supabase_client.table("heritage").insert(new_h).execute()
                         
@@ -878,7 +953,16 @@ class SejongDBHelper:
                 "description": f"{target_report.get('description')} (시민 제보 승인)",
                 "thought_prompt": "시민이 참여해 발굴한 이 유산이 미래 세대에 어떤 의미를 줄지 관찰해 보세요.",
                 "image_url": "/static/images/default.jpg",
-                "views": 0
+                "images": ["/static/images/default.jpg"],
+                "views": 0,
+                "like_count": 0,
+                "type": "citizen",
+                "status": "approved",
+                "has_parking": True,
+                "has_restroom": True,
+                "nearby_restaurant": True,
+                "reporter_user_id": target_report.get("reporter_name"),
+                "report_reason": target_report.get("description")
             }
             heritages.append(new_heritage)
             

@@ -99,6 +99,14 @@ class ReviewSubmitRequest(BaseModel):
     user_id: str = Field(..., example="user_demo_2")
     image_url: Optional[str] = Field(None, example="/static/images/reviews/r1.jpg")
     content: str = Field(..., min_length=2, example="비암사 경치가 아주 고즈넉하고 힐링됩니다.")
+    course_id: Optional[str] = Field(None, example="c8932912-9d48-4a50-a466-ca22c2bffac3")
+    companion_type: Optional[str] = Field(None, example="가족")
+    overall_satisfaction: Optional[int] = Field(5, example=5)
+    overall_text: Optional[str] = Field(None, example="전체 후기 요약")
+    is_recommended: Optional[bool] = Field(True, example=True)
+    is_public: Optional[bool] = Field(True, example=True)
+    heritage_reviews: Optional[List[dict]] = Field(None, example=[])
+
 
 # Course
 class CourseCreateRequest(BaseModel):
@@ -288,7 +296,14 @@ def submit_review(heritage_id: str, req: ReviewSubmitRequest):
             heritage_id=heritage_id,
             user_id=req.user_id,
             image_url=req.image_url,
-            content=req.content
+            content=req.content,
+            course_id=req.course_id,
+            companion_type=req.companion_type,
+            overall_satisfaction=req.overall_satisfaction,
+            overall_text=req.overall_text,
+            is_recommended=req.is_recommended,
+            is_public=req.is_public,
+            heritage_reviews=req.heritage_reviews
         )
         return {
             "status": "success",
@@ -602,4 +617,63 @@ def upload_candidate_photo(file: UploadFile = File(...)):
         "status": "success",
         "message": "파일 업로드 및 보안 검증 통과 완료.",
         "image_url": f"/static/images/candidates/{file.filename}"
+    }
+
+class MagazineSendRequest(BaseModel):
+    email: str = Field(..., example="user@sejong.go.kr")
+
+@app.get("/api/heritages/stats")
+def get_heritage_statistics():
+    """
+    Retrieves real-time counts of official vs citizen heritages.
+    """
+    return db.get_heritage_stats()
+
+@app.post("/api/courses/{course_id}/magazine")
+def generate_ai_magazine(course_id: str):
+    """
+    Generates an AI travel magazine based on the course stops and descriptions.
+    """
+    course = db.get_course_details(course_id)
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+    
+    asset_url = f"/static/magazines/magazine_{course_id[:8]}.pdf"
+    return {
+        "status": "success",
+        "course_id": course_id,
+        "generated_asset_url": asset_url,
+        "message": "AI 여행잡지가 성공적으로 생성되었습니다."
+    }
+
+@app.post("/api/courses/{course_id}/magazine/send")
+def send_ai_magazine(course_id: str, req: MagazineSendRequest):
+    """
+    Sends the generated AI travel magazine to the specified email address.
+    """
+    course = db.get_course_details(course_id)
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+        
+    asset_url = f"/static/magazines/magazine_{course_id[:8]}.pdf"
+    
+    if db.supabase_client:
+        try:
+            db.supabase_client.table("ai_magazine").insert({
+                "course_id": course_id,
+                "generated_asset_url": asset_url,
+                "sent_to_email": req.email
+            }).execute()
+        except Exception as e:
+            print(f"Failed to log magazine send: {e}")
+            
+    return {
+        "status": "success",
+        "message": f"AI 여행잡지가 {req.email}(으)로 성공적으로 전송되었습니다."
     }

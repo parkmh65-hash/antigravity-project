@@ -210,3 +210,27 @@ function saveSettings(settings) {
     throw new Error("백엔드 연동 설정 실패: " + e.message);
   }
 }
+
+/**
+ * Fetches real-time statistics from backend
+ */
+function fetchHeritageStats() {
+  var url = getApiBaseUrl() + "/api/heritages/stats";
+  try {
+    var response = UrlFetchApp.fetch(url, {
+      "method": "get",
+      "headers": {
+        "Authorization": "Bearer " + getAdminToken()
+      },
+      "muteHttpExceptions": true
+    });
+    
+    var responseCode = response.getResponseCode();
+    if (responseCode === 200) {
+      return JSON.parse(response.getContentText());
+    }
+  } catch (e) {
+    Logger.log("fetchHeritageStats error: " + e.toString());
+  }
+  return { "official_count": 0, "citizen_count": 0 };
+}
